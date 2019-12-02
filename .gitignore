@@ -1,0 +1,5 @@
+*.csv
+master.py
+/.vscode
+/Youtube*
+/__*
