@@ -2,35 +2,59 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output
+import dash_bootstrap_components as dbc
 
 import pandas as pd
+
 import plotly.graph_objs as go
 
 from datetime import datetime, timedelta
 
-#Options for parameters dropdown
+#Import data
+data = pd.read_csv("./data.csv", index_col="video_id")
+
+#Set correct data types
+type_int_list = ["views", "likes", "dislikes", "comment_count"]
+for column in type_int_list:
+    data[column] = data[column].astype(int)
+type_str_list = ["category_name"]
+for column in type_str_list:
+    data[column] = data[column].astype(str)
+
+#Format dates
+data["trending_date"] = pd.to_datetime(data["trending_date"], format="%y.%d.%m")
+data["trending_date"] = pd.to_datetime(data["trending_date"]).dt.strftime('%Y-%m-%d')
+data['trending_date'] = pd.to_datetime(data['trending_date'])
+data["publish_time"] = pd.to_datetime(data["publish_time"], format="%Y-%m-%d")
+data['publish_time'] = data['publish_time'].astype(str).str[:-6]
+data['publish_time'] = pd.to_datetime(data['publish_time'])
+
+#Available countries
 countries = [
-  {"label": "United states", "value": "USvideos.csv"},
-  {"label": "Canada", "value": "CAvideos.csv"},
-  {"label": "Germany", "value": "DEvideos.csv"},
-  {"label": "France", "value": "FRvideos.csv"},
-  {"label": "Great Britain", "value": "GBvideos.csv"},
-  {"label": "India", "value": "INvideos.csv"},
-  {"label": "Japan", "value": "JPvideos.csv"},
-  {"label": "South Korea", "value": "KRvideos.csv"},
-  {"label": "Mexico", "value": "MXvideos.csv"},
-  {"label": "Russia", "value": "RUvideos.csv"}
+  {"label": "United states", "value": "US"},
+  {"label": "Canada", "value": "CA"},
+  {"label": "Germany", "value": "DE"},
+  {"label": "France", "value": "FR"},
+  {"label": "Great Britain", "value": "GB"},
+  {"label": "India", "value": "IN"},
+  {"label": "Japan", "value": "JP"},
+  {"label": "South Korea", "value": "KR"},
+  {"label": "Mexico", "value": "MX"},
+  {"label": "Russia", "value": "RU"}
 ]
 
-categories = ['People & Blogs','Entertainment', 'Comedy', 'Science & Technology', 'Film & Animation', 'News & Politics', 'Sports', 'Music', 'Pets & Animals',
- 'Education', 'Howto & Style', 'Autos & Vehicles', 'Travel & Events', 'Gaming', 'Nonprofits & Activism', 'Shows', 'Movies','Trailers']
+#All categories
+categories = data["category_name"].unique() 
 
+#Options for parameters dropdown
 parameters = [
   {"label": "Views", "value": "views"},
   {"label": "Comments", "value": "comment_count"},
   {"label": "Likes", "value": "likes"},
   {"label": "Sum of videos", "value": "count"}
 ]
+
+#Publish date within this period
 publishParameters = [
   {"label": "All", "value": "all"},
   {"label": "Week", "value": "week"},
@@ -40,38 +64,72 @@ publishParameters = [
 ]
 
 #Application
-app = dash.Dash()
-app.layout = html.Div([
-  html.H1("Youtube data"),
-  html.Div(children=[
-    dcc.Dropdown(
-      id="countriesDropdown",
-      options=countries,
-      value=countries[0]["value"],
-      clearable=False
-    ),
-    dcc.Dropdown(
-      id="categoriesDropdown",
-      options=[{"label": i, "value": i} for i in categories],
-      multi=True,
-      value=categories,
-      placeholder="Select a category"
-    ),
-    dcc.Dropdown(
-      id="parametersDropdown",
-      options=parameters,
-      value=parameters[0]["value"],
-      clearable=False
-    ),
-    dcc.Dropdown(
-      id="videopublishDropdown",
-      options=publishParameters,
-      value=publishParameters[0]["value"],
-      clearable=False
-    )]
-  ),
+app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
+app.title= "DataViz"
+app.layout = dbc.Container([
+  html.Br(),
+  dbc.Row([
+    dbc.Col([
+      html.H1("Following YouTube trends"),
+      html.P("Data Visualization course project")
+    ])
+  ]),
+  html.Br(),
+  html.Br(),
   
-  html.Div(id="graph", children=[dcc.Graph(id="heatmap")])
+  dbc.Row([
+    dbc.Col([
+      html.H6("Select country"),
+      dcc.Dropdown(
+        id="countriesDropdown",
+        options=countries,
+        value=countries[0]["value"],
+        clearable=False
+      ),
+      html.Br(),
+      html.H6("Select categories"),
+      dcc.Dropdown(
+        id="categoriesDropdown",
+        options=[{"label": i, "value": i} for i in categories],
+        multi=True,
+        value=categories,
+        placeholder="Select a category"
+      ),
+    ],width=10),
+  ],justify='center'),
+  html.Br(),
+
+  dbc.Row([
+    dbc.Col([
+      html.Div(id="graph", children=[dcc.Graph(id="heatmap")])
+    ],width=10),
+    dbc.Col([
+      html.Br(),
+      html.Br(),
+      html.H6("Parameters"),
+      html.Br(),
+      html.P("Value:"),
+      dcc.Dropdown(
+        id="parametersDropdown",
+        options=parameters,
+        value=parameters[0]["value"],
+        clearable=False
+      ),
+      html.Br(),
+      html.P("Published within:"),
+      dcc.Dropdown(
+        id="videopublishDropdown",
+        options=publishParameters,
+        value=publishParameters[0]["value"],
+        clearable=False
+      )
+    ],width=2)
+  ]),
+
+  html.Br(),
+  dbc.Row([
+    dbc.Col(id="table",width=12)
+  ],justify='center') 
 ])
 
 @app.callback(Output("graph", "style"), [Input("categoriesDropdown","value")])
@@ -87,34 +145,17 @@ def hide_graph(input):
   Input("parametersDropdown","value"),
   Input("videopublishDropdown","value")])
 def update_graph(countriesDropdown,categoriesDropdown,parametersDropdownValue,videopublishDropdown):
-  #Data import
-  data = pd.read_csv(f"./Youtube/{countriesDropdown}", index_col="video_id")
-  #data = pd.read_csv("./test2.csv", index_col="video_id")
-
-  #Set correct data types
-  type_int_list = ["views", "likes", "dislikes", "comment_count"]
-  for column in type_int_list:
-      data[column] = data[column].astype(int)
-  type_str_list = ["category_name"]
-  for column in type_str_list:
-      data[column] = data[column].astype(str)
-
-  #Format dates
-  data["trending_date"] = pd.to_datetime(data["trending_date"], format="%y.%d.%m")
-  data["trending_date"] = pd.to_datetime(data["trending_date"]).dt.strftime('%Y-%m-%d')
-  data['trending_date'] = pd.to_datetime(data['trending_date'])
-  data["publish_time"] = pd.to_datetime(data["publish_time"], format="%Y-%m-%d")
-  data['publish_time'] = data['publish_time'].astype(str).str[:-6]
-  data['publish_time'] = pd.to_datetime(data['publish_time'])
+  #Set country
+  countryData = data[data["country"] == countriesDropdown]
 
   #Filter by publish date
   def publishfilter(filter):
     switcher={
-      "all":data,
-      "week":data[data['publish_time'] > (data['trending_date'] -timedelta(days=7))],
-      "month":data[data['publish_time'] > (data['trending_date'] - timedelta(days=30))],
-      "3months":data[data['publish_time'] > (data['trending_date'] - timedelta(days=90))],
-      "year":data[data['publish_time'] > (data['trending_date'] - timedelta(days=365))],
+      "all":countryData,
+      "week":countryData[countryData['publish_time'] > (countryData['trending_date'] -timedelta(days=7))],
+      "month":countryData[countryData['publish_time'] > (countryData['trending_date'] - timedelta(days=30))],
+      "3months":countryData[countryData['publish_time'] > (countryData['trending_date'] - timedelta(days=90))],
+      "year":countryData[countryData['publish_time'] > (countryData['trending_date'] - timedelta(days=365))],
     }
     return switcher.get(filter)
   filteredData = publishfilter(videopublishDropdown)
@@ -125,8 +166,6 @@ def update_graph(countriesDropdown,categoriesDropdown,parametersDropdownValue,vi
   #Count average grouped by category name and trending date
   meanData = round(filteredData.groupby(["category_name","trending_date"], as_index=False).mean())
 
-  meanData.to_csv(r"C:\Users\rumsa\Desktop\DaViz project\pandas.csv")
-
   #Select rows where category name is in categories dropdown list
   graphData = meanData[meanData["category_name"].isin(categoriesDropdown)]
 
@@ -136,12 +175,23 @@ def update_graph(countriesDropdown,categoriesDropdown,parametersDropdownValue,vi
       y=graphData["category_name"],
       z=graphData[parametersDropdownValue],
       hovertemplate='Trending date: %{x}<br>Category: %{y}<br>Average: %{z}<extra></extra>',
-      #Why low ones blue, 
-      colorscale=[[0, "rgb(12,51,131)"], [0.04, "rgb(10,136,186)"], [0.1, "rgb(242,211,56)"], [0.2, "rgb(242,143,56)"],[0.4, "rgb(217,30,50)"], [1, "rgb(217,30,30)"]]
+      colorscale=[
+        [0, "rgb(255,247,236)"],
+        [0.06, "rgb(254,232,200)"],
+        [0.08, "rgb(253,212,158)"],
+        [0.1, "rgb(253,187,132)"],
+        [0.15, "rgb(252,141,89)"],
+        [0.2, "rgb(239,101,72)"],
+        [0.3, "rgb(215,48,31)"],
+        [0.5, "rgb(179,0,0)"],
+        [0.8,"rgb(127,0,0)"],
+        [1,"rgb(103,0,13)"]
+      ],
     )],
     "layout": go.Layout(
       height = 600,
       legend=dict(x=-.1, y=1.2),
+      margin=dict(t=50, b=50),
       xaxis = dict(
         rangeselector=dict(
           buttons=list([
@@ -178,5 +228,44 @@ def update_graph(countriesDropdown,categoriesDropdown,parametersDropdownValue,vi
 
   return figure
 
+@app.callback(Output("table", "children"), [
+  Input("heatmap","clickData"),
+  Input("countriesDropdown","value"),
+  Input("parametersDropdown","value")]
+)
+def generate_table(clickData,countriesDropdown,parametersDropdown):
+  if clickData is not None:
+    #If not empty z
+    if 'z' in clickData['points'][0].keys():
+      #Filter by inputs
+      tableData = data.loc[(data["trending_date"] == clickData["points"][0]["x"]) &
+        (data["category_name"] == clickData["points"][0]["y"]) & 
+        (data["country"] == countriesDropdown)]
+      
+      #Format date
+      tableData["publish_time"] = pd.to_datetime(tableData["publish_time"], format="%y.%d.%m")
+      tableData["publish_time"] = pd.to_datetime(tableData["publish_time"]).dt.strftime('%Y-%m-%d')
+
+      #Sort values from min to max
+      if parametersDropdown == "count":
+        sortedtableData = tableData.sort_values(by=["channel_title"])
+      else:
+        sortedtableData = tableData.sort_values(by=[parametersDropdown])
+
+      #Format table data
+      del sortedtableData['country']
+      del sortedtableData['category_name']
+      del sortedtableData['trending_date']
+      sortedtableData.columns = ["Title","Channel","Upload date","Views","Likes","Dislikes","Comments"]
+      
+
+      return html.Div(children=[
+        html.H5("Trending videos in '"+clickData["points"][0]["y"]+"'"),
+        html.P("Date: "+clickData["points"][0]["x"]),
+        dbc.Table.from_dataframe(sortedtableData, bordered=True, hover=True,responsive=False),
+        html.Br(),
+        html.Br()
+      ])
+
 if __name__ == "__main__":
-  app.run_server(debug=True)
+  app.run_server(debug=False)

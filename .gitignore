@@ -2,4 +2,7 @@
 master.py
 /.vscode
 /Youtube*
+/Graphics
 /__*
+*.pdf
+
